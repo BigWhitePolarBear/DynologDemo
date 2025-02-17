@@ -12,14 +12,19 @@ from data import prepare_dataset, format_dataset, custom_collate
 
 def setup():
     # initialize distributed environment
-    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-        rank = int(os.environ["RANK"])
-        num_gpus = int(os.environ['WORLD_SIZE'])  
-        local_rank = int(os.environ['LOCAL_RANK'])
+    if 'SLURM_PROCID' in os.environ:
+        rank = int(os.environ['SLURM_PROCID'])
+        num_gpus = int(os.environ['SLURM_NTASKS'])
+        local_rank = int(os.environ['SLURM_LOCALID'])
     else:
-        rank = 0
-        num_gpus = 1
-        local_rank = 0
+        if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+            rank = int(os.environ['RANK'])
+            num_gpus = int(os.environ['WORLD_SIZE'])
+            local_rank = int(os.environ['LOCAL_RANK'])
+        else:
+            rank = 0
+            num_gpus = 1
+            local_rank = 0
 
     torch.cuda.set_device(local_rank)
     device = torch.device("cuda", local_rank)
@@ -57,7 +62,8 @@ def main():
     train_dataset = prepare_dataset(dataset["train"], tokenizer)
     train_sampler = DistributedSampler(train_dataset)
     train_loader = DataLoader(train_dataset, batch_size=2, shuffle=False, # DistributedSampler handles shuffle
-                              sampler=train_sampler, collate_fn=custom_collate, pin_memory=True)
+                              sampler=train_sampler, collate_fn=custom_collate, 
+                              num_workers=4, pin_memory=True)
 
     # freeze some layers
     num_layers = model.config.num_hidden_layers
@@ -67,7 +73,7 @@ def main():
             param.requires_grad = False
 
     # define DDP model
-    model = DDP(model, device_ids=[device])
+    model = DDP(model, device_ids=[device], find_unused_parameters=True)
 
     # define optimizer
     optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=5e-5)
@@ -86,7 +92,7 @@ def main():
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
             labels = batch["labels"].to(device)
-            
+
             # forward
             outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss

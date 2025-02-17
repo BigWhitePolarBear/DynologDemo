@@ -24,25 +24,23 @@ tokenizer.pad_token = tokenizer.eos_token
 
 # define dataset and loader
 train_dataset = prepare_dataset(dataset["train"], tokenizer)
-train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, collate_fn=custom_collate)
+train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=4, 
+                          pin_memory=True, collate_fn=custom_collate)
 
 # get model num layers
 num_layers = model.config.num_hidden_layers
 
 # freeze some layers
-half_layers = int(num_layers * 0.8)
+half_layers = int(num_layers * 0.9)
 for i in range(half_layers):
     for param in model.model.layers[i].parameters():
         param.requires_grad = False
 
 # define optimizer
-optimizer = AdamW(model.parameters(), lr=5e-5)
+optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=5e-5)
 
 # learning rate scheduler
 scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=100, num_training_steps=len(train_loader)*3)
-
-# loss function
-criterion = nn.CrossEntropyLoss()
 
 num_epochs = 1
 # finetune loop
@@ -62,7 +60,6 @@ for epoch in range(num_epochs):
         # backward
         loss.backward()
         optimizer.step()
-        state = optimizer.state_dict()
         scheduler.step()
         optimizer.zero_grad()
         
