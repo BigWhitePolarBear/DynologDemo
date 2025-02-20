@@ -4,3 +4,5 @@ finetuned-llama-3.1-8b/
 .vscode/
 __pycache__/
 slurm_out/
+trace_out/
+test.ipynb

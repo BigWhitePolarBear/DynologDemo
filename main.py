@@ -73,7 +73,7 @@ def main():
             param.requires_grad = False
 
     # define DDP model
-    model = DDP(model, device_ids=[device], find_unused_parameters=True)
+    model = DDP(model, device_ids=[device])
 
     # define optimizer
     optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=5e-5)
@@ -110,7 +110,7 @@ def main():
 
     if rank == 0:
         # saving the finetuned model
-        model.save_pretrained("finetuned-llama-3.1-8b")
+        model.module.save_pretrained("finetuned-llama-3.1-8b")
         tokenizer.save_pretrained("finetuned-llama-3.1-8b")
 
     cleanup()
