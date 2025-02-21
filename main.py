@@ -1,6 +1,4 @@
-import os
 import torch
-import torch.nn as nn
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, DistributedSampler
 from transformers import get_linear_schedule_with_warmup, LlamaForCausalLM, AutoTokenizer
@@ -9,37 +7,10 @@ from tqdm import tqdm
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from data import prepare_dataset, format_dataset, custom_collate
-
-def setup():
-    # initialize distributed environment
-    if 'SLURM_PROCID' in os.environ:
-        rank = int(os.environ['SLURM_PROCID'])
-        num_gpus = int(os.environ['SLURM_NTASKS'])
-        local_rank = int(os.environ['SLURM_LOCALID'])
-    else:
-        if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-            rank = int(os.environ['RANK'])
-            num_gpus = int(os.environ['WORLD_SIZE'])
-            local_rank = int(os.environ['LOCAL_RANK'])
-        else:
-            rank = 0
-            num_gpus = 1
-            local_rank = 0
-
-    torch.cuda.set_device(local_rank)
-    device = torch.device("cuda", local_rank)
-
-    torch.distributed.init_process_group(backend='nccl', 
-                                        init_method='env://',
-                                        world_size=num_gpus,
-                                        rank=rank)
-    return device, rank, num_gpus
-
-def cleanup():
-    torch.distributed.destroy_process_group()
+from utils import setup_distributed_env, cleanup_distributed_env
 
 def main():
-    device, rank, num_gpus = setup()
+    device, rank, _ = setup_distributed_env()
 
     # load dataset
     if rank == 0:
@@ -113,7 +84,7 @@ def main():
         model.module.save_pretrained("finetuned-llama-3.1-8b")
         tokenizer.save_pretrained("finetuned-llama-3.1-8b")
 
-    cleanup()
+    cleanup_distributed_env()
 
 if __name__ == "__main__":
     main()
