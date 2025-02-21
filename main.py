@@ -1,3 +1,4 @@
+import argparse
 import torch
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, DistributedSampler
@@ -9,37 +10,36 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from data import prepare_dataset, format_dataset, custom_collate
 from utils import setup_distributed_env, cleanup_distributed_env
 
-def main():
+def main(args):
     device, rank, _ = setup_distributed_env()
 
     # load dataset
     if rank == 0:
-        dataset = load_dataset("databricks/databricks-dolly-15k")
+        dataset = load_dataset(args.dataset_id)
     torch.distributed.barrier()
     if rank != 0:
-        dataset = load_dataset("databricks/databricks-dolly-15k")
+        dataset = load_dataset(args.dataset_id)
     dataset = dataset.map(format_dataset)
 
     # set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # loding model and tokenizer
-    model_id = "meta-llama/Llama-3.1-8B"
-    model = LlamaForCausalLM.from_pretrained(model_id, torch_dtype=torch.bfloat16).to(device)
-    tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=False)
+    model = LlamaForCausalLM.from_pretrained(args.model_id, torch_dtype=torch.bfloat16).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_id, use_fast=False)
     tokenizer.pad_token = tokenizer.eos_token
 
     # define dataset and loader
     train_dataset = prepare_dataset(dataset["train"], tokenizer)
     train_sampler = DistributedSampler(train_dataset)
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=False, # DistributedSampler handles shuffle
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False, # DistributedSampler handles shuffle
                               sampler=train_sampler, collate_fn=custom_collate, 
-                              num_workers=4, pin_memory=True)
+                              num_workers=args.num_workers, pin_memory=True)
 
     # freeze some layers
     num_layers = model.config.num_hidden_layers
-    half_layers = int(num_layers * 0.9)
-    for i in range(half_layers):
+    freeze_layers = int(num_layers * args.freeze_layers_ratio)
+    for i in range(freeze_layers):
         for param in model.model.layers[i].parameters():
             param.requires_grad = False
 
@@ -47,18 +47,19 @@ def main():
     model = DDP(model, device_ids=[device])
 
     # define optimizer
-    optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=5e-5)
+    optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
 
     # learning rate scheduler
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=100, num_training_steps=len(train_loader)*3)
+    scheduler = get_linear_schedule_with_warmup(optimizer, 
+                                                num_warmup_steps=args.warmup_steps, 
+                                                num_training_steps=len(train_loader)*args.num_epochs)
 
-    num_epochs = 1
     # finetune loop
-    for epoch in range(num_epochs):
+    for epoch in range(args.num_epochs):
         train_sampler.set_epoch(epoch)  # set epoch for DistributedSampler to shuffle
         model.train()
         total_loss = 0
-        for batch in tqdm(train_loader, desc=f"Epoch {epoch}/{num_epochs}", disable=(rank != 0)):
+        for batch in tqdm(train_loader, desc=f"Epoch {epoch}/{args.num_epochs}", disable=(rank != 0)):
             # moving input to GPU
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
@@ -77,14 +78,27 @@ def main():
             total_loss += loss.item()
         
         if rank == 0:
-            print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/len(train_loader):.4f}")
+            print(f"Epoch {epoch+1}/{args.num_epochs}, Loss: {total_loss/len(train_loader):.4f}")
 
     if rank == 0:
         # saving the finetuned model
-        model.module.save_pretrained("finetuned-llama-3.1-8b")
-        tokenizer.save_pretrained("finetuned-llama-3.1-8b")
+        model.module.save_pretrained(args.output_dir)
+        tokenizer.save_pretrained(args.output_dir)
 
     cleanup_distributed_env()
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Fine-tune a LLaMA model using PyTorch DDP")
+    parser.add_argument("--model_id", type=str, default="meta-llama/Llama-3.1-8B", help="Model ID from Hugging Face")
+    parser.add_argument("--dataset_id", type=str, default="databricks/databricks-dolly-15k", help="Dataset ID to train on")
+    parser.add_argument("--batch_size", type=int, default=2, help="Training batch size per GPU")
+    parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for DataLoader")
+    parser.add_argument("--freeze_layers_ratio", type=float, default=0.9, help="Ratio of layers to freeze (0.0 to 1.0)")
+    parser.add_argument("--num_epochs", type=int, default=1, help="Number of training epochs")
+    parser.add_argument("--learning_rate", type=float, default=5e-5, help="Learning rate for optimizer")
+    parser.add_argument("--warmup_steps", type=int, default=100, help="Number of warmup steps for learning rate scheduler")
+    parser.add_argument("--output_dir", type=str, default="finetuned-model", help="Output directory to save the model")
+
+    args = parser.parse_args()
+
+    main(args)

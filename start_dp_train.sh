@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --output=slurm_out/%x-%j.out
 #SBATCH --nodes=2
-#SBATCH --cpus-per-gpu=16
+#SBATCH --cpus-per-gpu=8
 #SBATCH --gpus-per-node=a100:1
 #SBATCH --mem-per-gpu=80G
 #SBATCH --ntasks-per-node=1

@@ -1,6 +1,6 @@
 not completed pp.py
 tmp.py
-finetuned-llama-3.1-8b/
+finetuned-model/
 .vscode/
 __pycache__/
 slurm_out/
