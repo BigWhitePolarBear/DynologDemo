@@ -1,5 +1,9 @@
 import torch
 
+def truncate_dataset(dataset, data_ratio):
+    if data_ratio < 1.0:
+        dataset["train"] = dataset["train"].select(range(int(len(dataset["train"])*data_ratio)))
+
 # formatting data
 def format_dataset(example):
     return {

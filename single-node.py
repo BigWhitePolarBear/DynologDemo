@@ -6,12 +6,12 @@ from transformers import get_linear_schedule_with_warmup, LlamaForCausalLM, Auto
 from datasets import load_dataset
 from tqdm import tqdm
 
-from data import prepare_dataset, format_dataset, custom_collate
+from data import prepare_dataset, format_dataset, custom_collate, truncate_dataset
 
 def main(args):
     # using Hugging Face datasets to load data
     dataset = load_dataset(args.dataset_id)
-
+    truncate_dataset(dataset, args.data_ratio)
     dataset = dataset.map(format_dataset)
 
     # set device
@@ -55,6 +55,7 @@ def main(args):
             # forward
             outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss
+            total_loss += loss.item() * args.batch_size
             
             # backward
             loss.backward()
@@ -79,6 +80,7 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="Learning rate for optimizer")
     parser.add_argument("--warmup_steps", type=int, default=100, help="Number of warmup steps for learning rate scheduler")
     parser.add_argument("--output_dir", type=str, default="finetuned-model", help="Output directory to save the model")
+    parser.add_argument("--data_ratio", type=float, default=1.0, help="Ratio of data to use for training")
 
     args = parser.parse_args()
 
