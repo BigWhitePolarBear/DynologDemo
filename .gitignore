@@ -6,3 +6,5 @@ __pycache__/
 slurm_out/
 trace_out/
 test.ipynb
+single-node-pytorch-profiler.py
+log/
