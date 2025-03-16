@@ -2,10 +2,10 @@
 #SBATCH --output=slurm_out/%x-%j.out
 #SBATCH --nodes=2
 #SBATCH --cpus-per-gpu=8
-#SBATCH --gpus-per-node=a100:1
-#SBATCH --mem-per-gpu=80G
+#SBATCH --gpus-per-node=v100:1
+#SBATCH --mem-per-gpu=60G
 #SBATCH --ntasks-per-node=1
-#SBATCH --time 01:30:00
+#SBATCH --time 00:10:00
 
 set -e # stop bash script on first error
 

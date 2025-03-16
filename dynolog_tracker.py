@@ -78,13 +78,13 @@ def main():
     log_file = get_log_file_name(args.log_dir)
     interval = args.interval
     next_time = time.time()
-    end_time = time.time() + total_duration if total_duration > 0 else float('inf')
+    elapsed_time = 0.0  # Track effective monitoring time
 
     print(f"Start monitoring dynolog (Interval: {interval}s, Duration: {args.duration})")
     print(f"Log file: {log_file}")
 
     try:
-        while time.time() < end_time:
+        while elapsed_time < total_duration:
             now = time.time()
             sleep_time = next_time - now
             
@@ -94,11 +94,10 @@ def main():
             data = get_dynolog_process_info()
             if data is not None:
                 append_to_log(data, log_file)
+                elapsed_time += interval
             
             next_time += interval
             
-            if total_duration > 0 and time.time() >= end_time:
-                break
     except KeyboardInterrupt:
         print("\nMonitoring stopped by user")
     

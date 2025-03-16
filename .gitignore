@@ -6,5 +6,8 @@ __pycache__/
 slurm_out/
 trace_out/
 test.ipynb
-single-node-pytorch-profiler.py
+single-node-pytorch-profiler*
 log/
+trace4HTA/
+perf.*
+flamegraph.*

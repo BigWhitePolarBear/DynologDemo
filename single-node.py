@@ -1,3 +1,4 @@
+import time
 import argparse
 import torch
 from torch.optim import AdamW
@@ -46,7 +47,8 @@ def main(args):
     for epoch in range(args.num_epochs):
         model.train()
         total_loss = 0
-        for batch in tqdm(train_loader, desc=f"Epoch {epoch}/{args.num_epochs}"):
+        for batch in tqdm(train_loader, desc=f"Epoch {epoch}/{args.num_epochs}", 
+                          bar_format = '{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_noinv_fmt}]'):
             # moving input to GPU
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
@@ -66,16 +68,16 @@ def main(args):
         print(f"Epoch {epoch+1}/{args.num_epochs}, Loss: {total_loss/len(train_loader):.4f}")
 
     # saving the finetuned model
-    model.save_pretrained(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
+    # model.save_pretrained(args.output_dir)
+    # tokenizer.save_pretrained(args.output_dir)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fine-tune a LLaMA model using PyTorch DDP")
-    parser.add_argument("--model_id", type=str, default="meta-llama/Llama-3.1-8B", help="Model ID from Hugging Face")
+    parser.add_argument("--model_id", type=str, default="meta-llama/Llama-3.2-1B", help="Model ID from Hugging Face")
     parser.add_argument("--dataset_id", type=str, default="databricks/databricks-dolly-15k", help="Dataset ID to train on")
-    parser.add_argument("--batch_size", type=int, default=2, help="Training batch size per GPU")
+    parser.add_argument("--batch_size", type=int, default=4, help="Training batch size per GPU")
     parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for DataLoader")
-    parser.add_argument("--freeze_layers_ratio", type=float, default=0.9, help="Ratio of layers to freeze (0.0 to 1.0)")
+    parser.add_argument("--freeze_layers_ratio", type=float, default=0.5, help="Ratio of layers to freeze (0.0 to 1.0)")
     parser.add_argument("--num_epochs", type=int, default=1, help="Number of training epochs")
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="Learning rate for optimizer")
     parser.add_argument("--warmup_steps", type=int, default=100, help="Number of warmup steps for learning rate scheduler")
