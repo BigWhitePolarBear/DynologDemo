@@ -1,6 +1,7 @@
 import argparse
 import re
 import subprocess
+import time
 
 # Parse arguments
 parser = argparse.ArgumentParser(description='GPU node trace script')
@@ -53,3 +54,5 @@ for node in nodes:
                 break  # Success, break the loop
         else:
             print(f"[Error] {node}: Command execution failed")
+
+        time.sleep(0.1)

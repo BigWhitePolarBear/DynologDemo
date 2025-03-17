@@ -22,9 +22,6 @@ def main(args):
     truncate_dataset(dataset, args.data_ratio)
     dataset = dataset.map(format_dataset)
 
-    # set device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     # loding model and tokenizer
     model = LlamaForCausalLM.from_pretrained(args.model_id, torch_dtype=torch.bfloat16).to(device)
     tokenizer = AutoTokenizer.from_pretrained(args.model_id, use_fast=False)
@@ -85,8 +82,9 @@ def main(args):
         # saving the finetuned model
         model.module.save_pretrained(args.output_dir)
         tokenizer.save_pretrained(args.output_dir)
-        print("Finetuning completed successfully!")
+        print(f"Model saved to {args.output_dir}")
 
+    torch.distributed.barrier()
     cleanup_distributed_env()
     
 if __name__ == "__main__":
